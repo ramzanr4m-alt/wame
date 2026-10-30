@@ -3,17 +3,20 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const pino = require('pino');
 
-// --- НАСТРОЙКИ ---
-const TG_TOKEN = '9032734400:AAE077CjWtLGPbSAKq_MA0wzvGHuc_c1Umw';
+// Безопасное чтение токена из настроек Render
+const TG_TOKEN = process.env.TG_TOKEN;
 const OWNER_TG_ID = 5846687574;
 
-// Черный список ID групп, куда отправлять НЕ нужно
 let BLACKLIST = [];
-// -----------------
 
 const app = express();
 app.get('/', (req, res) => res.send('Бот активен'));
 app.listen(process.env.PORT || 3000);
+
+if (!TG_TOKEN) {
+    console.error("ОШИБКА: Не задан токен Telegram в переменных окружения!");
+    process.exit(1);
+}
 
 const tgBot = new TelegramBot(TG_TOKEN, { polling: true });
 let sock;
@@ -32,7 +35,6 @@ async function startWhatsApp() {
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
-        
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) startWhatsApp();
@@ -43,7 +45,7 @@ async function startWhatsApp() {
 }
 
 tgBot.on('message', async (msg) => {
-    if (msg.from.id !== OWNER_TG_ID) return;
+    if (!msg.from || msg.from.id !== OWNER_TG_ID) return;
     const text = (msg.text || '').trim();
 
     if (text === '/link') {
@@ -75,7 +77,6 @@ tgBot.on('message', async (msg) => {
         try {
             const groups = await sock.groupFetchAllParticipating();
             const groupList = Object.values(groups);
-            
             if (groupList.length === 0) return tgBot.sendMessage(OWNER_TG_ID, 'Группы не найдены.');
 
             let report = 'Список групп:\n\n';
